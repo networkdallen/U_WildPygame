@@ -1,0 +1,230 @@
+import pygame
+from pygame import mixer
+import sys
+import random
+
+pygame.init()
+
+clock = pygame.time.Clock()
+fps = 60
+
+# Constants
+screen_width = 1080
+screen_height = 739
+
+# Create the window
+screen = pygame.display.set_mode((screen_width, screen_height))
+pygame.display.set_caption("U Wild by Alexavier")
+
+# Load background image
+background_path = 'game_backround.png'
+try:
+    background = pygame.image.load(background_path)
+    background = pygame.transform.scale(background, (screen_width, screen_height))
+except pygame.error as e:
+    print(f"Error loading background image: {e}")
+    sys.exit()
+
+# Load sprite sheet
+sprite_sheet_path = 'alex.png'
+try:
+    sprite_sheet = pygame.image.load(sprite_sheet_path).convert_alpha()
+
+except pygame.error as e:
+    print(f"Error loading sprite sheet: {e}")
+    sys.exit()
+
+# Load meteor image
+meteor_image_path = 'meteor.png'
+try:
+    original_meteor_image = pygame.image.load(meteor_image_path)
+    # Adjust the size of the meteor
+    meteor_size = (60, 60)  # Increased size
+    meteor_image = pygame.transform.scale(original_meteor_image, meteor_size)
+except pygame.error as e:
+    print(f"Error loading meteor image: {e}")
+    sys.exit()
+
+# Load bullet image
+bullet_image_path = 'bullet.png'
+try:
+    original_bullet_image = pygame.image.load(bullet_image_path)
+    # Adjust the size of the bullet
+    bullet_size = (20, 40)  # Increased size
+    bullet_image = pygame.transform.scale(original_bullet_image, bullet_size)
+except pygame.error as e:
+    print(f"Error loading bullet image: {e}")
+    sys.exit()
+
+
+# Load background music
+background_music_path = 'uwild.wav'
+try:
+    mixer.music.load(background_music_path)
+    mixer.music.set_volume(1.0)  # Set the volume (0.0 to 1.0)
+    mixer.music.play(loops=-1, fade_ms=3000)  # Play the music in an infinite loop
+    
+except pygame.error as e:
+    print(f"Error loading background music: {e}")
+
+
+# Number of rows and columns in the sprite sheet
+rows, columns = 10, 10
+
+# Calculate the size of each sprite
+sprite_width = sprite_sheet.get_width() // columns
+sprite_height = sprite_sheet.get_height() // rows
+
+# List to store individual sprites
+sprites = []
+steps = 4
+
+for x in range(steps):
+    # Extract sprites from the sprite sheet
+    for row in range(rows):
+        for col in range(columns):
+            x = col * sprite_width
+            y = row * sprite_height
+            sprite = sprite_sheet.subsurface((x, y, sprite_width, sprite_height))
+            sprites.append(sprite)
+
+# Player variables
+player_width, player_height = sprite_width, sprite_height
+player_x = 0  # Starting from the left edge
+player_y = screen_height - player_height  # Starting from the bottom edge
+player_speed = 5
+current_sprite = 0
+
+# Meteor variables
+meteors = []
+
+# Bullet variables
+bullets = []
+bullet_speed = 10
+bullet_cooldown = 0
+bullet_cooldown_time = 15  # Adjust as needed
+
+# Meteor spawn variables
+spawn_timer = 0
+spawn_interval = 120  # Initial spawn interval (2 seconds)
+max_meteors = 40  # Maximum number of meteors on the screen
+spawn_rate_increase = 15  # Increase spawn rate every second
+meteor_speed = .8  # Adjust the speed of meteors
+
+# Countdown variables
+countdown_duration = 3 * fps  # 3 seconds
+countdown_timer = countdown_duration
+# Load countdown image
+countdown_image_path = 'end.jpg'
+try:
+    countdown_image = pygame.image.load(countdown_image_path)
+    countdown_image = pygame.transform.scale(countdown_image, (int(screen_width * 0.65), int(screen_height * 0.65)))
+    countdown_rect = countdown_image.get_rect(center=(screen_width // 2, screen_height // 2))
+except pygame.error as e:
+    print(f"Error loading countdown image: {e}")
+    sys.exit()
+
+# Countdown loop
+while countdown_timer > 0:
+    for event in pygame.event.get():
+        if event.type == pygame.QUIT:
+            pygame.quit()
+            sys.exit()
+    
+    screen.blit(background, (0, 0))
+    screen.blit(countdown_image, countdown_rect)
+    pygame.display.flip()
+    countdown_timer -= 1
+    clock.tick(fps)
+
+# Function to check for collisions between player and meteors
+def check_collision(player_rect, meteor_rect):
+    return player_rect.colliderect(meteor_rect)
+
+
+# Game loop
+run = True
+while run:
+    clock.tick(fps)
+
+    for event in pygame.event.get():
+        if event.type == pygame.QUIT:
+            run = False
+
+    keys = pygame.key.get_pressed()
+
+    # Move left
+    if keys[pygame.K_LEFT] and player_x > 0:
+        player_x -= player_speed
+
+    # Move right
+    if keys[pygame.K_RIGHT] and player_x < screen_width - player_width:
+        player_x += player_speed
+
+    # Shoot bullet upward
+    if keys[pygame.K_SPACE] and bullet_cooldown <= 0:
+        bullet_x = player_x + player_width // 2 - bullet_size[0] // 2
+        bullet_y = player_y
+        bullets.append([bullet_x, bullet_y])
+        bullet_cooldown = bullet_cooldown_time
+
+    # Update bullet cooldown
+    if bullet_cooldown > 0:
+        bullet_cooldown -= 1
+
+    # Update meteor positions and handle collisions
+    for meteor in meteors:
+        meteor[1] += meteor_speed  # Adjust the speed of meteors
+        meteor_rect = pygame.Rect(meteor[0], meteor[1], meteor_size[0], meteor_size[1])
+
+        # Check for collisions with bullets
+        for bullet in bullets:
+            bullet_rect = pygame.Rect(bullet[0], bullet[1], bullet_size[0], bullet_size[1])
+            if bullet_rect.colliderect(meteor_rect):
+                # Remove the meteor and bullet
+                meteors.remove(meteor)
+                bullets.remove(bullet)
+                break
+
+    # Generate new meteors randomly
+    spawn_timer += 1
+    if len(meteors) < max_meteors and spawn_timer >= spawn_interval:
+        meteor_x = random.randint(0, screen_width - meteor_size[0])
+        meteor_y = 0 - meteor_size[1]
+        meteors.append([meteor_x, meteor_y])
+        spawn_timer = 0
+
+        # Increase spawn rate gradually
+        if spawn_interval > 30:
+            spawn_interval -= spawn_rate_increase  # Decrease spawn interval every second
+
+    # Update bullet positions
+    for bullet in bullets:
+        bullet[1] -= bullet_speed
+
+    # Draw the background
+    screen.blit(background, (0, 0))
+
+    # Draw the meteors
+    for meteor in meteors:
+        screen.blit(meteor_image, (meteor[0], meteor[1]))
+
+    # Draw the bullets
+    for bullet in bullets:
+        screen.blit(bullet_image, (bullet[0], bullet[1]))
+
+    # Draw the player sprite
+    screen.blit(sprites[current_sprite], (player_x, player_y))
+
+    # Update the display
+    pygame.display.flip()
+
+
+
+# Stop the background music when quitting Pygame
+pygame
+
+
+# Quit Pygame
+pygame.quit()
+sys.exit()
